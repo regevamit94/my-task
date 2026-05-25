@@ -186,9 +186,6 @@ pipeline {
             helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
             -f "$HELM_VALUES_FILE" \
-            --atomic \
-            --wait \
-            --timeout 5m
 
             helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
             '''
