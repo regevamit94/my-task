@@ -41,7 +41,7 @@ ingress:
   hosts:
     - host: ""
       paths:
-        - path: /amit
+        - path: /amit(/|$)(.*)
           pathType: Prefix
   tls: []
 
