@@ -35,10 +35,11 @@ pipeline {
             returnStdout: true,
             script: '''#!/usr/bin/env bash
             set -euo pipefail
-            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ]; then
-            git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
+            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" >/dev/null 2>&1; then
+              git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
             else
-            git show --pretty="" --name-only "$GIT_COMMIT"
+              # First run or shallow clone without previous commit available.
+              git ls-files
             fi
             '''
           ).trim()
@@ -52,11 +53,10 @@ pipeline {
           }
 
           if (helmRelevant.isEmpty()) {
-            env.SKIP_DEPLOY = 'true'
-            currentBuild.description = 'No Helm chart changes detected'
-            echo "No Helm chart changes in commit ${env.GIT_COMMIT}. Skipping deployment."
+            env.CHART_CHANGED = 'false'
+            echo "No Helm chart changes detected from SCM diff."
           } else {
-            env.SKIP_DEPLOY = 'false'
+            env.CHART_CHANGED = 'true'
             echo "Helm-related changes detected: ${helmRelevant.join(', ')}"
           }
         }
@@ -77,14 +77,14 @@ pipeline {
 
             if (releaseExists != 0) {
               env.DEPLOY_ACTION = 'install'
-              env.SKIP_DEPLOY = 'false'
               currentBuild.description = 'First-time install: Helm release not found'
               echo "Release ${env.HELM_RELEASE} not found in namespace ${env.HELM_NAMESPACE}. Action: install."
-            } else if (env.SKIP_DEPLOY != 'true') {
+            } else if (env.CHART_CHANGED == 'true') {
               env.DEPLOY_ACTION = 'upgrade'
               echo "Release ${env.HELM_RELEASE} exists and chart changed. Action: upgrade."
             } else {
               env.DEPLOY_ACTION = 'skip'
+              currentBuild.description = 'No Helm chart changes detected'
               echo "Release ${env.HELM_RELEASE} already exists and no chart changes. Action: skip."
             }
           }
