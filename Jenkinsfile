@@ -65,6 +65,7 @@ pipeline {
         }
       }
     }
+  }
 
 //     stage('Determine Deploy Action') {
 //       steps {
@@ -199,4 +200,3 @@ pipeline {
 //       echo 'Pipeline failed. Check stage logs for details.'
 //     }
 //   }
- }
