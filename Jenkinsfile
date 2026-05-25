@@ -1,6 +1,10 @@
 pipeline {
   agent any
 
+  parameters {
+    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '', description: 'Optional kubeconfig path for local mode; leave empty to use VM default context')
+  }
+
   triggers {
     // GitHub webhook should point to: https://<jenkins-url>/github-webhook/
     githubPush()
@@ -16,9 +20,6 @@ pipeline {
     HELM_NAMESPACE = 'amit'
     HELM_CHART_PATH = '.'
     HELM_VALUES_FILE = 'values.yaml'
-
-    // Jenkins file credential that contains kubeconfig for the target AKS cluster.
-    KUBECONFIG_CREDENTIAL_ID = 'aks-kubeconfig'
   }
 
   stages {
@@ -34,14 +35,14 @@ pipeline {
           String diffOutput = sh(
             returnStdout: true,
             script: '''#!/usr/bin/env bash
-            set -euo pipefail
-            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" >/dev/null 2>&1; then
-              git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
-            else
-              # First run or shallow clone without previous commit available.
-              git ls-files
-            fi
-            '''
+                set -euo pipefail
+                if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" >/dev/null 2>&1; then
+                git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
+                else
+                # First run or shallow clone without previous commit available.
+                git ls-files
+                fi
+                '''
           ).trim()
 
           List<String> changedFiles = diffOutput ? diffOutput.split('\n') as List<String> : []
@@ -65,28 +66,28 @@ pipeline {
 
     stage('Determine Deploy Action') {
       steps {
-        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL_ID, variable: 'KUBECONFIG')]) {
-          script {
-            int releaseExists = sh(
-              returnStatus: true,
-              script: '''#!/usr/bin/env bash
-              set -euo pipefail
-              helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" >/dev/null 2>&1
-              '''
-            )
+        script {
+          String detectReleaseScript = '''#!/usr/bin/env bash
+            set -euo pipefail
+            if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            fi
+            helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" >/dev/null 2>&1
+            '''
 
-            if (releaseExists != 0) {
-              env.DEPLOY_ACTION = 'install'
-              currentBuild.description = 'First-time install: Helm release not found'
-              echo "Release ${env.HELM_RELEASE} not found in namespace ${env.HELM_NAMESPACE}. Action: install."
-            } else if (env.CHART_CHANGED == 'true') {
-              env.DEPLOY_ACTION = 'upgrade'
-              echo "Release ${env.HELM_RELEASE} exists and chart changed. Action: upgrade."
-            } else {
-              env.DEPLOY_ACTION = 'skip'
-              currentBuild.description = 'No Helm chart changes detected'
-              echo "Release ${env.HELM_RELEASE} already exists and no chart changes. Action: skip."
-            }
+          int releaseExists = sh(returnStatus: true, script: detectReleaseScript)
+
+          if (releaseExists != 0) {
+            env.DEPLOY_ACTION = 'install'
+            currentBuild.description = 'First-time install: Helm release not found'
+            echo "Release ${env.HELM_RELEASE} not found in namespace ${env.HELM_NAMESPACE}. Action: install."
+          } else if (env.CHART_CHANGED == 'true') {
+            env.DEPLOY_ACTION = 'upgrade'
+            echo "Release ${env.HELM_RELEASE} exists and chart changed. Action: upgrade."
+          } else {
+            env.DEPLOY_ACTION = 'skip'
+            currentBuild.description = 'No Helm chart changes detected'
+            echo "Release ${env.HELM_RELEASE} already exists and no chart changes. Action: skip."
           }
         }
       }
@@ -98,12 +99,12 @@ pipeline {
       }
       steps {
         sh '''#!/usr/bin/env bash
-        set -euo pipefail
-        helm version
-        kubectl version --client
-        helm lint "$HELM_CHART_PATH"
-        helm template "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE" >/dev/null
-        '''
+            set -euo pipefail
+            helm version
+            kubectl version --client
+            helm lint "$HELM_CHART_PATH"
+            helm template "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE" >/dev/null
+            '''
       }
     }
 
@@ -112,21 +113,25 @@ pipeline {
         expression { env.DEPLOY_ACTION == 'install' }
       }
       steps {
-        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL_ID, variable: 'KUBECONFIG')]) {
-        sh '''#!/usr/bin/env bash
-        set -euo pipefail
-        kubectl get ns "$HELM_NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$HELM_NAMESPACE"
+        script {
+          String installScript = '''#!/usr/bin/env bash
+            set -euo pipefail
+            if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            fi
+            kubectl get ns "$HELM_NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$HELM_NAMESPACE"
 
-        helm install "$HELM_RELEASE" "$HELM_CHART_PATH" \
-        --namespace "$HELM_NAMESPACE" \
-        --create-namespace \
-        -f "$HELM_VALUES_FILE" \
-        --atomic \
-        --wait \
-        --timeout 5m
+            helm install "$HELM_RELEASE" "$HELM_CHART_PATH" \
+            --namespace "$HELM_NAMESPACE" \
+            --create-namespace \
+            -f "$HELM_VALUES_FILE" \
+            --atomic \
+            --wait \
+            --timeout 5m
 
-        helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
-        '''
+            helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
+            '''
+          sh installScript
         }
       }
     }
@@ -136,9 +141,12 @@ pipeline {
         expression { env.DEPLOY_ACTION == 'upgrade' }
       }
       steps {
-        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL_ID, variable: 'KUBECONFIG')]) {
-        sh '''#!/usr/bin/env bash
+        script {
+          String upgradeScript = '''#!/usr/bin/env bash
         set -euo pipefail
+        if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
+          export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+        fi
 
         helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" \
         --namespace "$HELM_NAMESPACE" \
@@ -149,6 +157,7 @@ pipeline {
 
         helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
         '''
+          sh upgradeScript
         }
       }
     }
