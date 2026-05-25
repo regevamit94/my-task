@@ -1,6 +1,6 @@
 deploymentName: simple-web-deployment
 
-replicaCount: 2
+replicaCount: 1
 
 labels:
   app: simple-web
@@ -64,7 +64,7 @@ keda:
   enabled: true
   pollingInterval: 30
   cooldownPeriod: 300
-  minReplicaCount: 1
+  minReplicaCount: 2
   maxReplicaCount: 6
   cpu:
     enabled: true
