@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   parameters {
-    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '/home/azureuser/.kube/config', description: 'Kubeconfig path on Jenkins VM (set empty to use process default)')
+    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '/var/lib/jenkins/.kube/config', description: 'Kubeconfig path on Jenkins VM (set empty to use process default)')
   }
 
   triggers {
@@ -43,6 +43,7 @@ pipeline {
           String diffOutput = sh(
             returnStdout: true,
             script: '''#!/usr/bin/env bash
+                export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
                 set -euo pipefail
                 if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" >/dev/null 2>&1; then
                 git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
