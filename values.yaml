@@ -35,13 +35,13 @@ service:
   selector: {}
 
 ingress:
-  enabled: false
+  enabled: true
   className: ""
   annotations: {}
   hosts:
-    - host: chart-example.local
+    - host: ""
       paths:
-        - path: /
+        - path: /amit
           pathType: Prefix
   tls: []
 
