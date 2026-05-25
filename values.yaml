@@ -26,7 +26,7 @@ service:
   name: simple-web-service
   type: ClusterIP
   port: 80
-  targetPort: 8080
+  targetPort: 80
   portName: http
   protocol: TCP
   nodePort: null
@@ -38,13 +38,12 @@ ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/rewrite-target: /
   hosts:
     - host: ""
       paths:
-        - path: /amit(/|$)(.*)
-          pathType: ImplementationSpecific
+        - path: /amit
+          pathType: Prefix
   tls: []
 
 resources:
