@@ -23,9 +23,16 @@ serviceAccount:
   name: default
 
 service:
+  name: simple-web-service
   type: ClusterIP
   port: 80
   targetPort: 8080
+  portName: http
+  protocol: TCP
+  nodePort: null
+  annotations: {}
+  labels: {}
+  selector: {}
 
 ingress:
   enabled: false
