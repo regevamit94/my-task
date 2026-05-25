@@ -1,10 +1,6 @@
 pipeline {
   agent any
 
-  parameters {
-    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '/var/lib/jenkins/.kube/config', description: 'Kubeconfig path on Jenkins VM (set empty to use process default)')
-  }
-
   triggers {
     // GitHub webhook should point to: https://<jenkins-url>/github-webhook/
     githubPush()
@@ -20,6 +16,7 @@ pipeline {
     HELM_NAMESPACE = 'amit'
     HELM_CHART_PATH = '.'
     HELM_VALUES_FILE = 'values.yaml'
+    LOCAL_KUBECONFIG_PATH = '/var/lib/jenkins/.kube/config'
   }
 
   stages {
