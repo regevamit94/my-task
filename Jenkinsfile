@@ -1,6 +1,10 @@
 pipeline {
   agent any
 
+  parameters {
+    choice(name: 'ACTION', choices: ['DEPLOY', 'DESTROY'], description: 'Choose whether to deploy or destroy the Helm release')
+  }
+
   triggers {
     // GitHub webhook should point to: https://<jenkins-url>/github-webhook/
     githubPush()
@@ -27,6 +31,9 @@ pipeline {
     }
 
     stage('Detect Helm Chart Changes') {
+      when {
+        expression { params.ACTION == 'DEPLOY' }
+      }
       steps {
         script {
           String diffOutput = sh(
@@ -60,6 +67,9 @@ pipeline {
     }
 
     stage('Validate Helm') {
+      when {
+        expression { params.ACTION == 'DEPLOY' }
+      }
       steps {
         sh '''#!/usr/bin/env bash
             set -euo pipefail
@@ -78,6 +88,9 @@ pipeline {
     }
 
     stage('Deploy To AKS') {
+      when {
+        expression { params.ACTION == 'DEPLOY' }
+      }
       steps {
         script {
           String deployScript = '''#!/usr/bin/env bash
@@ -92,11 +105,30 @@ pipeline {
         }
       }
     }
+
+    stage('Destroy From AKS') {
+      when {
+        expression { params.ACTION == 'DESTROY' }
+      }
+      steps {
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+
+            if helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" >/dev/null 2>&1; then
+              helm uninstall "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" --wait
+              echo "Helm release '$HELM_RELEASE' was removed from namespace '$HELM_NAMESPACE'."
+            else
+              echo "Helm release '$HELM_RELEASE' was not found in namespace '$HELM_NAMESPACE'. Nothing to destroy."
+            fi
+            '''
+      }
+    }
   }
 
   post {
     success {
-      echo 'Helm deployment pipeline completed successfully.'
+      echo "Helm pipeline completed successfully. ACTION=${params.ACTION}"
     }
     failure {
       echo 'Pipeline failed. Check stage logs for details.'
