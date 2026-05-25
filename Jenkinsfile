@@ -75,6 +75,11 @@ pipeline {
             kubectl version --client
             helm lint "$HELM_CHART_PATH"
             helm template "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE" >/dev/null
+            helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
+            --namespace "$HELM_NAMESPACE" \
+            -f "$HELM_VALUES_FILE" \
+            --dry-run \
+            --debug >/dev/null
             '''
       }
     }
