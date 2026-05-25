@@ -29,17 +29,15 @@ pipeline {
     stage('Detect Helm Chart Changes') {
       steps {
         script {
-            
           String diffOutput = sh(
             returnStdout: true,
             script: '''#!/usr/bin/env bash
                 export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
                 set -euo pipefail
                 if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && git cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" >/dev/null 2>&1; then
-                git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
+                  git diff --name-only "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$GIT_COMMIT"
                 else
-                # First run or shallow clone without previous commit available.
-                git ls-files
+                  git ls-files
                 fi
                 '''
           ).trim()
@@ -53,10 +51,8 @@ pipeline {
           }
 
           if (helmRelevant.isEmpty()) {
-            env.CHART_CHANGED = 'false'
-            echo 'No Helm chart changes detected from SCM diff.'
+            echo 'No Helm chart file changes detected in diff, but deploying anyway to ensure cluster is in sync.'
           } else {
-            env.CHART_CHANGED = 'true'
             echo "Helm-related changes detected: ${helmRelevant.join(', ')}"
           }
         }
@@ -64,9 +60,6 @@ pipeline {
     }
 
     stage('Validate Helm') {
-      when {
-        expression { env.CHART_CHANGED == 'true' }
-      }
       steps {
         sh '''#!/usr/bin/env bash
             set -euo pipefail
@@ -85,18 +78,11 @@ pipeline {
     }
 
     stage('Deploy To AKS') {
-      when {
-        expression { env.CHART_CHANGED == 'true' }
-      }
       steps {
         script {
           String deployScript = '''#!/usr/bin/env bash
             set -euo pipefail
-            if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
-              export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
-            elif [ -f "$HOME/.kube/config" ]; then
-              export KUBECONFIG="$HOME/.kube/config"
-            fi
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
 
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
