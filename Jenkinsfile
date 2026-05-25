@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   parameters {
-    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '/var/lib/jenkins/.kube/config', description: 'Kubeconfig path on Jenkins VM (set empty to use process default)')
+    string(name: 'LOCAL_KUBECONFIG_PATH', defaultValue: '/home/azureuser/.kube/config', description: 'Kubeconfig path on Jenkins VM (set empty to use process default)')
   }
 
   triggers {
@@ -34,6 +34,7 @@ pipeline {
         script {
           // AKS reachability check - output goes to console only, not captured
           sh '''#!/usr/bin/env bash
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             set -euo pipefail
             kubectl version --client
             kubectl get all -n "$HELM_NAMESPACE"
