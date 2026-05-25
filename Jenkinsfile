@@ -119,11 +119,9 @@ pipeline {
             if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             fi
-            kubectl get ns "$HELM_NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$HELM_NAMESPACE"
 
             helm install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
-            --create-namespace \
             -f "$HELM_VALUES_FILE" \
             --atomic \
             --wait \
