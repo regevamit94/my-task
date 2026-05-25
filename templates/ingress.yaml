@@ -5,9 +5,14 @@ metadata:
   name: {{ .Values.deploymentName }}-ingress
   labels:
 {{ toYaml .Values.labels | indent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- if or .Values.ingress.className .Values.ingress.annotations }}
   annotations:
+    {{- if .Values.ingress.className }}
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
 {{ toYaml . | indent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   {{- if .Values.ingress.className }}
