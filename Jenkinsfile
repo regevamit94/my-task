@@ -32,14 +32,7 @@ pipeline {
     stage('Detect Helm Chart Changes') {
       steps {
         script {
-          // AKS reachability check - output goes to console only, not captured
-          sh '''#!/usr/bin/env bash
-            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
-            set -euo pipefail
-            kubectl version --client
-            kubectl get all -n "$HELM_NAMESPACE"
-            '''
-
+            
           String diffOutput = sh(
             returnStdout: true,
             script: '''#!/usr/bin/env bash
