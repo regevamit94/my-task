@@ -16,7 +16,7 @@ pipeline {
     HELM_NAMESPACE = 'amit'
     HELM_CHART_PATH = '.'
     HELM_VALUES_FILE = 'values.yaml'
-    LOCAL_KUBECONFIG_PATH = /var/lib/jenkins/.kube/config
+    LOCAL_KUBECONFIG_PATH = '/var/lib/jenkins/.kube/config'
   }
 
   stages {
