@@ -32,6 +32,13 @@ pipeline {
     stage('Detect Helm Chart Changes') {
       steps {
         script {
+          // AKS reachability check - output goes to console only, not captured
+          sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            kubectl version --client
+            kubectl get all -n "$HELM_NAMESPACE"
+            '''
+
           String diffOutput = sh(
             returnStdout: true,
             script: '''#!/usr/bin/env bash
@@ -42,8 +49,6 @@ pipeline {
                 # First run or shallow clone without previous commit available.
                 git ls-files
                 fi
-                kubectl version --client
-                kubectl get all -n "$HELM_NAMESPACE"
                 '''
           ).trim()
 
@@ -66,7 +71,7 @@ pipeline {
       }
     }
   }
-
+}
 //     stage('Determine Deploy Action') {
 //       steps {
 //         script {
