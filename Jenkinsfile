@@ -64,7 +64,7 @@ pipeline {
 
           if (helmRelevant.isEmpty()) {
             env.CHART_CHANGED = 'false'
-            echo "No Helm chart changes detected from SCM diff."
+            echo 'No Helm chart changes detected from SCM diff.'
           } else {
             env.CHART_CHANGED = 'true'
             echo "Helm-related changes detected: ${helmRelevant.join(', ')}"
@@ -79,9 +79,9 @@ pipeline {
           String detectReleaseScript = '''#!/usr/bin/env bash
             set -euo pipefail
             if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
-              export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             elif [ -f "$HOME/.kube/config" ]; then
-              export KUBECONFIG="$HOME/.kube/config"
+            export KUBECONFIG="$HOME/.kube/config"
             fi
 
             # Fail fast if cluster auth/connectivity is broken.
@@ -93,13 +93,13 @@ pipeline {
             set -e
 
             if [ "$status_rc" -eq 0 ]; then
-              echo "EXISTS"
-              exit 0
+            echo "EXISTS"
+            exit 0
             fi
 
             if echo "$status_output" | grep -qiE 'release: not found|not found'; then
-              echo "NOT_FOUND"
-              exit 0
+            echo "NOT_FOUND"
+            exit 0
             fi
 
             echo "$status_output" >&2
@@ -150,9 +150,9 @@ pipeline {
           String installScript = '''#!/usr/bin/env bash
             set -euo pipefail
             if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
-              export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             elif [ -f "$HOME/.kube/config" ]; then
-              export KUBECONFIG="$HOME/.kube/config"
+            export KUBECONFIG="$HOME/.kube/config"
             fi
 
             helm install "$HELM_RELEASE" "$HELM_CHART_PATH" \
@@ -176,26 +176,27 @@ pipeline {
       steps {
         script {
           String upgradeScript = '''#!/usr/bin/env bash
-        set -euo pipefail
-        if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
-          export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
-        elif [ -f "$HOME/.kube/config" ]; then
-          export KUBECONFIG="$HOME/.kube/config"
-        fi
+            set -euo pipefail
+            if [ -n "${LOCAL_KUBECONFIG_PATH:-}" ]; then
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            elif [ -f "$HOME/.kube/config" ]; then
+            export KUBECONFIG="$HOME/.kube/config"
+            fi
 
-        helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" \
-        --namespace "$HELM_NAMESPACE" \
-        -f "$HELM_VALUES_FILE" \
-        --atomic \
-        --wait \
-        --timeout 5m
+            helm upgrade "$HELM_RELEASE" "$HELM_CHART_PATH" \
+            --namespace "$HELM_NAMESPACE" \
+            -f "$HELM_VALUES_FILE" \
+            --atomic \
+            --wait \
+            --timeout 5m
 
-        helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
-        '''
+            helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
+            '''
           sh upgradeScript
         }
       }
     }
+  }
 
   post {
     success {
@@ -204,6 +205,5 @@ pipeline {
     failure {
       echo 'Pipeline failed. Check stage logs for details.'
     }
-   }
   }
 }
