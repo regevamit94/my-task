@@ -1,0 +1,8 @@
+apiVersion: v2
+name: simple-web
+description: Helm chart for deploying simple-web application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: DevOps Team
