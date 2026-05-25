@@ -1,23 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "simple-web.fullname" . }}
+  name: {{ .Values.app.name }}
   labels:
-    {{- include "simple-web.labels" . | nindent 4 }}
+    {{- toYaml .Values.app.labels | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "simple-web.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- toYaml .Values.app.labels | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "simple-web.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- toYaml .Values.app.labels | nindent 8 }}
     spec:
       containers:
-        - name: {{ include "simple-web.name" . }}
+        - name: {{ .Values.app.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

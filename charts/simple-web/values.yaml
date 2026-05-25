@@ -1,5 +1,10 @@
 replicaCount: 1
 
+app:
+  name: simple-web
+  labels:
+    app: simple-web
+
 image:
   repository: acrinterview.azurecr.io/simple-web
   tag: latest

@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "simple-web.fullname" . }}
+  name: {{ .Values.app.name }}
   labels:
-    {{- include "simple-web.labels" . | nindent 4 }}
+    {{- toYaml .Values.app.labels | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -12,5 +12,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/name: {{ include "simple-web.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- toYaml .Values.app.labels | nindent 4 }}
