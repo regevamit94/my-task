@@ -87,7 +87,6 @@ pipeline {
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
             -f "$HELM_VALUES_FILE"
-            echo "Helm deployment completed successfully."
             '''
           sh deployScript
         }
