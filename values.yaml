@@ -1,6 +1,6 @@
 deploymentName: simple-web-deployment
 
-replicaCount: 1
+replicaCount: 2
 
 labels:
   app: simple-web
