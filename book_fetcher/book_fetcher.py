@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import json
 from pathlib import Path
@@ -23,20 +21,8 @@ class SearchResponse(BaseModel):
 
 class JsonOutputWriter:
 	def write(self, books: List[Book], output_path: Path) -> None:
-		payload = [_model_dump(book) for book in books]
+		payload = [book.dict(by_alias=False) for book in books]
 		output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def _model_validate(model_class: Any, data: Dict[str, Any]) -> Any:
-	if hasattr(model_class, "model_validate"):
-		return model_class.model_validate(data)
-	return model_class.parse_obj(data)
-
-
-def _model_dump(model: BaseModel) -> Dict[str, Any]:
-	if hasattr(model, "model_dump"):
-		return model.model_dump(by_alias=False)
-	return model.dict(by_alias=False)
 
 
 def _http_error_with_headers(exc: requests.exceptions.HTTPError) -> RuntimeError:
@@ -72,7 +58,7 @@ def fetch_books(query: str) -> SearchResponse:
 	except requests.exceptions.RequestException as exc:
 		raise RuntimeError(f"Network error while calling Open Library: {exc}") from exc
 
-	return _model_validate(SearchResponse, response.json())
+	return SearchResponse.parse_obj(response.json())
 
 
 def filter_books(books: List[Book], title_keyword: str, min_year: int) -> List[Book]:
