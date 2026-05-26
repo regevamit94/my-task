@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import urllib.parse
-import urllib.request
-from urllib.error import HTTPError, URLError
+import re
+import time
 from pathlib import Path
 from typing import Protocol
 
@@ -13,10 +12,18 @@ from pydantic import BaseModel, Field
 
 # Primary provider endpoint.
 OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
+GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
+REQUEST_TIMEOUT_SECONDS = 30
+GOOGLE_BOOKS_MAX_ATTEMPTS = 3
 REQUEST_HEADERS = {
     # Some public APIs block requests with generic default clients.
-    "User-Agent": "book-fetcher/1.0 (+https://openlibrary.org)",
-    "Accept": "application/json",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 
@@ -48,28 +55,82 @@ class JsonOutputWriter:
 
 
 def fetch_books(query: str) -> SearchResponse:
-    # Build a URL-safe query string for the Open Library search endpoint before sending the API request.
-    params = urllib.parse.urlencode({"q": query})
-    request_url = f"{OPEN_LIBRARY_SEARCH_URL}?{params}"
+    open_library_error_message = "unknown error"
 
-    # Send the request to the Open Library search endpoint and decode the response body.
-    request = urllib.request.Request(request_url, headers=REQUEST_HEADERS)
-
+    # Try Open Library first.
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            raw_data = response.read().decode("utf-8")
-    except HTTPError as exc:
-        raise RuntimeError(
-            f"Open Library request failed with HTTP {exc.code} for URL: {request_url}"
-        ) from exc
-    except URLError as exc:
-        raise RuntimeError(
-            f"Could not reach Open Library API: {exc.reason}"
-        ) from exc
+        response = requests.get(
+            OPEN_LIBRARY_SEARCH_URL,
+            params={"q": query},
+            headers=REQUEST_HEADERS,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return SearchResponse.model_validate(response.json())
+    except requests.exceptions.RequestException as open_library_error:
+        open_library_error_message = str(open_library_error)
+        print(
+            "Open Library request failed; trying Google Books fallback. "
+            f"Reason: {open_library_error}"
+        )
 
-    # Parse the JSON response and validate it against our response model.
-    data = json.loads(raw_data)
-    return SearchResponse.model_validate(data)
+    # If Open Library is blocked/unreachable, fetch from Google Books instead.
+    google_books_error_message = "unknown error"
+    for attempt in range(1, GOOGLE_BOOKS_MAX_ATTEMPTS + 1):
+        try:
+            response = requests.get(
+                GOOGLE_BOOKS_SEARCH_URL,
+                params={"q": query, "maxResults": 20},
+                headers=REQUEST_HEADERS,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+
+            # Handle provider rate limiting with bounded backoff retries.
+            if response.status_code == 429 and attempt < GOOGLE_BOOKS_MAX_ATTEMPTS:
+                retry_after = response.headers.get("Retry-After")
+                delay_seconds = int(retry_after) if retry_after and retry_after.isdigit() else attempt * 2
+                print(
+                    "Google Books rate-limited the request (HTTP 429). "
+                    f"Retrying in {delay_seconds}s (attempt {attempt}/{GOOGLE_BOOKS_MAX_ATTEMPTS})."
+                )
+                time.sleep(delay_seconds)
+                continue
+
+            response.raise_for_status()
+
+            payload = response.json()
+            docs_payload: list[dict[str, object]] = []
+
+            for item in payload.get("items", []):
+                volume_info = item.get("volumeInfo", {})
+                title = volume_info.get("title")
+                if not title:
+                    continue
+
+                published_date = volume_info.get("publishedDate")
+                year_match = re.search(r"(\d{4})", published_date or "")
+
+                docs_payload.append(
+                    {
+                        "title": title,
+                        "author_name": volume_info.get("authors", []),
+                        "first_publish_year": int(year_match.group(1)) if year_match else None,
+                    }
+                )
+
+            return SearchResponse.model_validate({"docs": docs_payload})
+        except requests.exceptions.RequestException as google_books_error:
+            google_books_error_message = str(google_books_error)
+            if attempt < GOOGLE_BOOKS_MAX_ATTEMPTS:
+                time.sleep(attempt * 2)
+                continue
+            break
+
+    raise RuntimeError(
+        "Both Open Library and Google Books requests failed. "
+        f"Open Library error: {open_library_error_message}. "
+        f"Google Books error: {google_books_error_message}"
+    )
 
 
 def filter_books(
