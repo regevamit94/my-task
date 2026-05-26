@@ -76,7 +76,17 @@ pipeline {
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             helm version
             kubectl version --client
+            '''
+
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             helm lint "$HELM_CHART_PATH"
+            '''
+
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             helm template "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE" >/dev/null
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
@@ -100,6 +110,8 @@ pipeline {
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
             -f "$HELM_VALUES_FILE"
+
+            helm test "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
             '''
           sh deployScript
         }
