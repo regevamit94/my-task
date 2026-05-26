@@ -4,12 +4,18 @@ import argparse
 import json
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import BaseModel, Field
 
 OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
+REQUEST_HEADERS = {
+    # Some public APIs block requests with generic default clients.
+    "User-Agent": "book-fetcher/1.0 (+https://openlibrary.org)",
+    "Accept": "application/json",
+}
 
 
 class Book(BaseModel):
@@ -45,8 +51,19 @@ def fetch_books(query: str) -> SearchResponse:
     request_url = f"{OPEN_LIBRARY_SEARCH_URL}?{params}"
 
     # Send the request to the Open Library search endpoint and decode the response body.
-    with urllib.request.urlopen(request_url, timeout=30) as response:
-        raw_data = response.read().decode("utf-8")
+    request = urllib.request.Request(request_url, headers=REQUEST_HEADERS)
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw_data = response.read().decode("utf-8")
+    except HTTPError as exc:
+        raise RuntimeError(
+            f"Open Library request failed with HTTP {exc.code} for URL: {request_url}"
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"Could not reach Open Library API: {exc.reason}"
+        ) from exc
 
     # Parse the JSON response and validate it against our response model.
     data = json.loads(raw_data)
