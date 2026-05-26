@@ -73,6 +73,7 @@ pipeline {
       steps {
         sh '''#!/usr/bin/env bash
             set -euo pipefail
+            echo "Validating Helm CLI and Kubernetes client versions..."
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             helm version
             kubectl version --client
@@ -80,6 +81,7 @@ pipeline {
 
         sh '''#!/usr/bin/env bash
             set -euo pipefail
+            echo "Linting Helm chart at path: $HELM_CHART_PATH"
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             helm lint "$HELM_CHART_PATH"
             '''
@@ -87,6 +89,7 @@ pipeline {
         sh '''#!/usr/bin/env bash
             set -euo pipefail
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            echo "Performing Helm dry-run upgrade to validate chart rendering and Kubernetes API compatibility..."
             helm template "$HELM_RELEASE" "$HELM_CHART_PATH" -f "$HELM_VALUES_FILE" >/dev/null
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
@@ -106,6 +109,7 @@ pipeline {
           String deployScript = '''#!/usr/bin/env bash
             set -euo pipefail
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            echo "Deploying Helm release '$HELM_RELEASE' to namespace '$HELM_NAMESPACE'..."
 
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
@@ -126,6 +130,7 @@ pipeline {
         sh '''#!/usr/bin/env bash
             set -euo pipefail
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            echo "Destroying Helm release '$HELM_RELEASE' from namespace '$HELM_NAMESPACE'..."
 
             if helm status "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" >/dev/null 2>&1; then
               helm uninstall "$HELM_RELEASE" --namespace "$HELM_NAMESPACE" --wait
