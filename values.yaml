@@ -64,7 +64,7 @@ keda:
   enabled: true
   pollingInterval: 30
   cooldownPeriod: 300
-  minReplicaCount: 2
+  minReplicaCount: 1
   maxReplicaCount: 6
   cpu:
     enabled: true
