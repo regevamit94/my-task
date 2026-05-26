@@ -1,12 +1,13 @@
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
 from pydantic import BaseModel, Field
 
-OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
+GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 
 
 class Book(BaseModel):
@@ -47,8 +48,8 @@ def _http_error_with_headers(exc: requests.exceptions.HTTPError) -> RuntimeError
 def fetch_books(query: str) -> SearchResponse:
 	try:
 		response = requests.get(
-			OPEN_LIBRARY_SEARCH_URL,
-			params={"q": query},
+			GOOGLE_BOOKS_SEARCH_URL,
+			params={"q": query, "maxResults": 20},
 			headers={"Accept": "application/json", "User-Agent": "book-fetcher/1.0"},
 			timeout=30,
 		)
@@ -56,9 +57,29 @@ def fetch_books(query: str) -> SearchResponse:
 	except requests.exceptions.HTTPError as exc:
 		raise _http_error_with_headers(exc) from exc
 	except requests.exceptions.RequestException as exc:
-		raise RuntimeError(f"Network error while calling Open Library: {exc}") from exc
+		raise RuntimeError(f"Network error while calling Google Books: {exc}") from exc
 
-	return SearchResponse.parse_obj(response.json())
+	payload = response.json()
+	docs: List[Dict[str, Any]] = []
+
+	for item in payload.get("items", []):
+		volume_info = item.get("volumeInfo", {})
+		title = volume_info.get("title")
+		if not title:
+			continue
+
+		published_date = volume_info.get("publishedDate", "")
+		year_match = re.search(r"(\d{4})", str(published_date))
+
+		docs.append(
+			{
+				"title": title,
+				"author_name": volume_info.get("authors", []),
+				"first_publish_year": int(year_match.group(1)) if year_match else None,
+			}
+		)
+
+	return SearchResponse.parse_obj({"docs": docs})
 
 
 def filter_books(books: List[Book], title_keyword: str, min_year: int) -> List[Book]:
@@ -78,8 +99,8 @@ def filter_books(books: List[Book], title_keyword: str, min_year: int) -> List[B
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-	parser = argparse.ArgumentParser(description="Fetch and filter books from Open Library.")
-	parser.add_argument("--query", required=True, help="Query sent to Open Library search API.")
+	parser = argparse.ArgumentParser(description="Fetch and filter books from Google Books.")
+	parser.add_argument("--query", required=True, help="Query sent to Google Books API.")
 	parser.add_argument("--title-keyword", required=True, help="Keep books whose title contains this keyword.")
 	parser.add_argument("--min-year", required=True, type=int, help="Keep books with first_publish_year >= this year.")
 	parser.add_argument("--output", required=True, help="Output JSON file path.")
