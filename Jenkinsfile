@@ -105,8 +105,7 @@ pipeline {
         expression { params.ACTION == 'DEPLOY' }
       }
       steps {
-        script {
-          String deployScript = '''#!/usr/bin/env bash
+        sh '''#!/usr/bin/env bash
             set -euo pipefail
             export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
             echo "Deploying Helm release '$HELM_RELEASE' to namespace '$HELM_NAMESPACE'..."
@@ -114,11 +113,15 @@ pipeline {
             helm upgrade --install "$HELM_RELEASE" "$HELM_CHART_PATH" \
             --namespace "$HELM_NAMESPACE" \
             -f "$HELM_VALUES_FILE"
+            '''
+
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            export KUBECONFIG="$LOCAL_KUBECONFIG_PATH"
+            echo "Running Helm tests for release '$HELM_RELEASE' in namespace '$HELM_NAMESPACE'..."
 
             helm test "$HELM_RELEASE" --namespace "$HELM_NAMESPACE"
             '''
-          sh deployScript
-        }
       }
     }
 
