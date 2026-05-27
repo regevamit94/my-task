@@ -27,7 +27,7 @@ python -m pip install -r requirements.txt
 
 Use `python -m pip` after activation to ensure packages are installed in the virtual environment.
 
-## Run
+## Run example (Values can be changed)
 
 ```bash
 python book_fetcher.py --query python --title-keyword python --min-year 2000 --output filtered_books.json
