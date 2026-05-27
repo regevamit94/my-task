@@ -74,7 +74,7 @@ def _http_error_with_headers(exc: requests.exceptions.HTTPError) -> RuntimeError
 
 def fetch_books(query: str) -> SearchResponse:
 	try:
-		# Send a search request and identify the app per API guidance.
+		# Send an API request to Open Library with the requested headers as mentioned in the library API documentation.
 		response = requests.get(
 			OPEN_LIBRARY_SEARCH_URL,
 			params={"q": query},
@@ -104,22 +104,20 @@ def filter_books(books: List[Book], title_keyword: str, min_year: int) -> List[B
 	filtered: List[Book] = []
 
 	for book in books:
-		# Keep only titles that include the keyword.
+		# Keep only titles that include the keyword and with known publish year at or above threshold.
 		if keyword not in book.title.lower():
 			continue
 
-		# Keep only books with known publish year at or above threshold.
 		if book.first_publish_year is None or book.first_publish_year < min_year:
 			continue
 
-		# Book satisfies both filters.
+		# If the book passed all filters, add it to the filtered list.
 		filtered.append(book)
 
 	return filtered
 
-
+# Define command-line interface for query/filter/output settings.
 def build_argument_parser() -> argparse.ArgumentParser:
-	# Define command-line interface for query/filter/output settings.
 	parser = argparse.ArgumentParser(description="Fetch and filter books from Open Library.")
 	parser.add_argument("--query", required=True, help="Query sent to Open Library search API.")
 	parser.add_argument("--title-keyword", required=True, help="Keep books whose title contains this keyword.")
@@ -129,7 +127,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-	# Parse CLI input values.
+	# Parse input values passed when running the script.
 	args = build_argument_parser().parse_args()
 
 	try:
