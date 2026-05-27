@@ -36,4 +36,4 @@ python book_fetcher.py --query python --title-keyword python --min-year 2000 --o
 ## Output
 
 The script prints how many books were fetched and filtered, then writes the final list to the JSON file you specify.
-Pay attention that the library has a short rate-limit, so from time to time, depends of requests amount, there is a chance to be denied by the library and recieve HTTP 403 Forbidden error which the script know how to handle with.
+Pay attention that the library has a short rate-limit, so from time to time, depends of requests amount, there is a chance to be denied by the library and recieve HTTP 403 Forbidden error which the script knows how to handle with.
