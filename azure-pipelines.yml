@@ -1,0 +1,189 @@
+trigger:
+  branches:
+    include:
+      - "*"
+
+pr:
+  branches:
+    include:
+      - "*"
+
+parameters:
+  - name: action
+    displayName: Pipeline action
+    type: string
+    default: DEPLOY
+    values:
+      - DEPLOY
+      - DESTROY
+  - name: vmssPool
+    displayName: Azure DevOps VM Scale Set agent pool
+    type: string
+    default: azure-vmss-agents
+  - name: azureServiceConnection
+    displayName: Azure service connection
+    type: string
+    default: azure-service-connection
+  - name: environmentName
+    displayName: Azure DevOps environment for deployment approvals
+    type: string
+    default: simple-web-aks
+  - name: runHelmTests
+    displayName: Run helm test after deployment
+    type: boolean
+    default: true
+
+variables:
+  helmRelease: simple-web
+  helmNamespace: amit
+  helmChartPath: .
+  helmValuesFile: values.yaml
+  aksResourceGroup: $(AKS_RESOURCE_GROUP)
+  aksClusterName: $(AKS_CLUSTER_NAME)
+  kubeConfigPath: $(Pipeline.Workspace)/.kube/config
+
+stages:
+  - stage: VerifyAgent
+    displayName: Verify VM Scale Set agent
+    jobs:
+      - job: VerifyAgentImage
+        displayName: Check required CLIs
+        pool:
+          name: ${{ parameters.vmssPool }}
+        steps:
+          - checkout: self
+          - bash: |
+              set -euo pipefail
+              echo "Verifying required tools on the VM Scale Set agent..."
+              git --version
+              az version
+              helm version
+              kubectl version --client
+            displayName: Verify CLI versions
+
+  - stage: Validate
+    displayName: Validate Helm chart
+    dependsOn: VerifyAgent
+    condition: and(succeeded(), eq('${{ parameters.action }}', 'DEPLOY'))
+    jobs:
+      - job: ValidateHelm
+        displayName: Lint and dry-run
+        pool:
+          name: ${{ parameters.vmssPool }}
+        steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: Validate Helm chart against AKS
+            inputs:
+              azureSubscription: ${{ parameters.azureServiceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                mkdir -p "$(dirname "$(kubeConfigPath)")"
+                az aks get-credentials \
+                  --resource-group "$(aksResourceGroup)" \
+                  --name "$(aksClusterName)" \
+                  --file "$(kubeConfigPath)" \
+                  --overwrite-existing
+                export KUBECONFIG="$(kubeConfigPath)"
+
+                helm lint "$(helmChartPath)"
+                helm template "$(helmRelease)" "$(helmChartPath)" -f "$(helmValuesFile)" >/dev/null
+                helm upgrade --install "$(helmRelease)" "$(helmChartPath)" \
+                  --namespace "$(helmNamespace)" \
+                  --create-namespace \
+                  -f "$(helmValuesFile)" \
+                  --dry-run \
+                  --debug >/dev/null
+
+  - stage: Deploy
+    displayName: Deploy to AKS
+    dependsOn: Validate
+    condition: and(succeeded(), eq('${{ parameters.action }}', 'DEPLOY'))
+    jobs:
+      - deployment: DeployHelmRelease
+        displayName: Helm upgrade
+        environment: ${{ parameters.environmentName }}
+        pool:
+          name: ${{ parameters.vmssPool }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureCLI@2
+                  displayName: Deploy Helm release
+                  inputs:
+                    azureSubscription: ${{ parameters.azureServiceConnection }}
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      mkdir -p "$(dirname "$(kubeConfigPath)")"
+                      az aks get-credentials \
+                        --resource-group "$(aksResourceGroup)" \
+                        --name "$(aksClusterName)" \
+                        --file "$(kubeConfigPath)" \
+                        --overwrite-existing
+                      export KUBECONFIG="$(kubeConfigPath)"
+
+                      helm upgrade --install "$(helmRelease)" "$(helmChartPath)" \
+                        --namespace "$(helmNamespace)" \
+                        --create-namespace \
+                        -f "$(helmValuesFile)"
+                - ${{ if eq(parameters.runHelmTests, true) }}:
+                    - task: AzureCLI@2
+                      displayName: Run Helm tests
+                      inputs:
+                        azureSubscription: ${{ parameters.azureServiceConnection }}
+                        scriptType: bash
+                        scriptLocation: inlineScript
+                        inlineScript: |
+                          set -euo pipefail
+                          mkdir -p "$(dirname "$(kubeConfigPath)")"
+                          az aks get-credentials \
+                            --resource-group "$(aksResourceGroup)" \
+                            --name "$(aksClusterName)" \
+                            --file "$(kubeConfigPath)" \
+                            --overwrite-existing
+                          export KUBECONFIG="$(kubeConfigPath)"
+
+                          helm test "$(helmRelease)" --namespace "$(helmNamespace)"
+
+  - stage: Destroy
+    displayName: Destroy from AKS
+    dependsOn: VerifyAgent
+    condition: and(succeeded(), eq('${{ parameters.action }}', 'DESTROY'))
+    jobs:
+      - deployment: DestroyHelmRelease
+        displayName: Helm uninstall
+        environment: ${{ parameters.environmentName }}
+        pool:
+          name: ${{ parameters.vmssPool }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: Uninstall Helm release
+                  inputs:
+                    azureSubscription: ${{ parameters.azureServiceConnection }}
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      mkdir -p "$(dirname "$(kubeConfigPath)")"
+                      az aks get-credentials \
+                        --resource-group "$(aksResourceGroup)" \
+                        --name "$(aksClusterName)" \
+                        --file "$(kubeConfigPath)" \
+                        --overwrite-existing
+                      export KUBECONFIG="$(kubeConfigPath)"
+
+                      if helm status "$(helmRelease)" --namespace "$(helmNamespace)" >/dev/null 2>&1; then
+                        helm uninstall "$(helmRelease)" --namespace "$(helmNamespace)" --wait
+                        echo "Helm release '$(helmRelease)' removed from namespace '$(helmNamespace)'."
+                      else
+                        echo "Helm release '$(helmRelease)' was not found in namespace '$(helmNamespace)'. Nothing to destroy."
+                      fi
